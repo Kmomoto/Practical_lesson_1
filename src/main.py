@@ -1,16 +1,42 @@
-import socket
-import getpass
+"""Эмулятор языка оболочки ОС — этап 1 (Вариант №25).
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTextEdit, QLineEdit
+Минимальный прототип: окно с логом и полем ввода. Команды ls и cd
+пока являются заглушками — они просто печатают своё имя и аргументы.
+"""
+
+import getpass
+import socket
+import sys
+
+from PySide6.QtWidgets import (
+    QApplication,
+    QLineEdit,
+    QMainWindow,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 def make_title():
+    """Собрать заголовок окна вида 'Эмулятор - [user@host]'."""
     user = getpass.getuser()
     host = socket.gethostname()
     return "Эмулятор - [" + user + "@" + host + "]"
 
 
+def parse_command(line):
+    """Разбить строку ввода на команду и список аргументов по пробелам."""
+    parts = line.split()
+    if len(parts) == 0:
+        return None, []
+    command = parts[0]
+    args = parts[1:]
+    return command, args
+
+
 def run_command(command, args):
+    """Выполнить команду и вернуть текст, который нужно вывести в лог."""
     if command == "ls":
         return "ls: вызвана с аргументами " + str(args)
     elif command == "cd":
@@ -20,6 +46,8 @@ def run_command(command, args):
 
 
 class MainWindow(QMainWindow):
+    """Главное окно эмулятора: лог диалога и строка ввода."""
+
     def __init__(self):
         super().__init__()
 
@@ -43,18 +71,14 @@ class MainWindow(QMainWindow):
         self.log.append("Эмулятор запущен. Команды: ls, cd, exit")
 
     def handle_input(self):
+        """Обработать нажатие Enter: показать ввод и результат команды."""
         line = self.input_field.text()
         self.input_field.clear()
-
         self.log.append("> " + line)
 
-        line = line.strip()
-        if line == "":
+        command, args = parse_command(line)
+        if command is None:
             return
-
-        parts = line.split()
-        command = parts[0]
-        args = parts[1:]
 
         if command == "exit":
             self.close()
@@ -65,10 +89,11 @@ class MainWindow(QMainWindow):
 
 
 def main():
-    app = QApplication([])
+    """Запустить приложение эмулятора."""
+    app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
-    app.exec()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
