@@ -20,7 +20,13 @@ app = QApplication.instance() or QApplication([])
 class TestMakeTitle(unittest.TestCase):
 
     def test_format(self):
-        expected = "Эмулятор - [" + getpass.getuser() + "@" + socket.gethostname() + "]"
+        expected = (
+            "Эмулятор - ["
+            + getpass.getuser()
+            + "@"
+            + socket.gethostname()
+            + "]"
+        )
         self.assertEqual(main.make_title(), expected)
 
 
@@ -44,13 +50,22 @@ class TestParseCommand(unittest.TestCase):
 class TestRunCommand(unittest.TestCase):
 
     def test_ls(self):
-        self.assertEqual(main.run_command("ls", ["-l"]), "ls: вызвана с аргументами ['-l']")
+        self.assertEqual(
+            main.run_command("ls", ["-l"]),
+            "ls: вызвана с аргументами ['-l']",
+        )
 
     def test_cd(self):
-        self.assertEqual(main.run_command("cd", ["/home"]), "cd: вызвана с аргументами ['/home']")
+        self.assertEqual(
+            main.run_command("cd", ["/home"]),
+            "cd: вызвана с аргументами ['/home']",
+        )
 
     def test_unknown_command(self):
-        self.assertEqual(main.run_command("abc", []), "Ошибка: команда не найдена: abc")
+        self.assertEqual(
+            main.run_command("abc", []),
+            "Ошибка: команда не найдена: abc",
+        )
 
 
 class TestMainWindow(unittest.TestCase):
@@ -74,7 +89,10 @@ class TestMainWindow(unittest.TestCase):
 
     def test_ls_output(self):
         self.type_command("ls -l")
-        self.assertEqual(self.log_lines()[-2:], ["> ls -l", "ls: вызвана с аргументами ['-l']"])
+        self.assertEqual(
+            self.log_lines()[-2:],
+            ["> ls -l", "ls: вызвана с аргументами ['-l']"],
+        )
 
     def test_exit_closes_window(self):
         self.assertTrue(self.window.isVisible())
