@@ -1,0 +1,9 @@
+# Стартовый скрипт для VFS с несколькими файлами (архив без записей о каталогах)
+ls
+ls docs
+cd docs
+ls
+cd ..
+ls
+cd data.bin
+ls /docs/missing.txt

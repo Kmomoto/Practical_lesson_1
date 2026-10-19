@@ -1,0 +1,6 @@
+# Стартовый скрипт для минимальной VFS (архив из одного файла hello.txt)
+ls
+ls hello.txt
+cd /
+cd hello.txt
+cd missing

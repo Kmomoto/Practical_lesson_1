@@ -1,0 +1,53 @@
+# Стартовый скрипт: все команды этапов 1-3 во всех режимах.
+# Рассчитан на VFS из scripts/test_vfs_deep.sh:
+#   /readme.txt
+#   /docs/guide.txt
+#   /docs/manual/index.txt
+#   /docs/manual/chapter1/{intro.txt,notes.txt}
+#   /projects/alpha/src/main.c
+#   /projects/empty/           (пустой каталог)
+
+# --- ls: без аргументов, с абсолютным и относительным путём, с файлом
+ls
+ls /docs
+ls docs/manual
+ls /readme.txt
+ls /projects/empty
+
+# --- cd: относительный путь, '..', '.', абсолютный путь, cd без аргументов
+cd docs
+ls
+cd manual/chapter1
+ls
+cd ..
+ls
+cd ../..
+ls
+cd /projects/alpha/src
+ls
+cd .
+ls ..
+cd
+ls
+
+# --- путь к каталогу, лежащему вне текущего
+cd /docs
+ls ../projects
+
+# --- ошибки: несуществующий путь, cd в файл, лишние аргументы, неизвестная команда
+ls /no/such/path
+cd /no/such/path
+cd /readme.txt
+cd /readme.txt/x
+cd docs manual
+ls docs manual
+abc
+abc 1 2
+
+# --- '..' выше корня остаётся в корне
+cd /
+cd ../../..
+ls
+
+# --- завершение работы
+exit
