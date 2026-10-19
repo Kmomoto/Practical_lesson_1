@@ -1,0 +1,64 @@
+# Стартовый скрипт этапа 4: ls, cd, pwd, history во всех режимах.
+# Рассчитан на VFS из scripts/test_vfs_deep.sh. Запуск:
+#   ./scripts/test_vfs_deep.sh scripts/start_stage4.txt
+# Структура VFS:
+#   /readme.txt
+#   /docs/guide.txt
+#   /docs/manual/index.txt
+#   /docs/manual/chapter1/{intro.txt,notes.txt}
+#   /projects/alpha/src/main.c
+#   /projects/empty/           (пустой каталог)
+
+# --- pwd: в корне, после cd (относительный и абсолютный путь, '..', без аргумента)
+pwd
+cd docs/manual
+pwd
+cd chapter1
+pwd
+cd ../..
+pwd
+cd /projects/alpha/src
+pwd
+cd
+pwd
+
+# --- ls: без аргументов, с путём (абсолютным, относительным), с файлом
+ls
+ls /docs
+ls docs/manual/chapter1
+ls /readme.txt
+ls ../..
+ls /projects/empty
+
+# --- cd: '..', '.', составной путь, выше корня
+cd /docs/manual
+cd ..
+pwd
+cd ./manual/./chapter1
+pwd
+cd /
+cd ../../..
+pwd
+
+# --- history: вся история, последние N, граничные значения
+history
+history 3
+history 1
+history 0
+history 1000
+
+# --- ошибки
+ls /no/such/path
+cd /no/such/path
+cd /readme.txt
+cd docs manual
+ls docs manual
+pwd extra
+history 1 2
+history abc
+history -5
+abc
+
+# --- в истории видны и неудачные команды
+pwd
+history 8

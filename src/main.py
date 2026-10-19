@@ -41,8 +41,28 @@ def parse_args():
     return parser.parse_args()
 
 
-def run_command(command, args, vfs):
+def run_history(args, history):
+    """history [N]: все введённые команды или только последние N."""
+    if len(args) > 1:
+        return "Ошибка: history не принимает более одного аргумента"
+    count = len(history)
+    if args:
+        try:
+            requested = int(args[0])
+        except ValueError:
+            requested = -1
+        if requested < 0:
+            return "Ошибка: history: неверный аргумент: " + args[0]
+        count = min(requested, len(history))
+    first = len(history) - count
+    lines = [str(i + 1) + " " + history[i] for i in range(first, len(history))]
+    return "\n".join(lines)
+
+
+def run_command(command, args, vfs, history=None):
     """Выполнить команду над VFS и вернуть текст для вывода в лог."""
+    if history is None:
+        history = []
     try:
         if command == "ls":
             if len(args) > 1:
@@ -54,6 +74,12 @@ def run_command(command, args, vfs):
                 return "Ошибка: cd не принимает более одного аргумента"
             vfs.chdir(args[0] if args else "/")
             return ""
+        if command == "pwd":
+            if args:
+                return "Ошибка: pwd не принимает аргументов"
+            return vfs.pwd()
+        if command == "history":
+            return run_history(args, history)
     except VFSError as error:
         return "Ошибка: " + command + ": " + str(error)
     return "Ошибка: команда не найдена: " + command
@@ -71,6 +97,7 @@ class MainWindow(QMainWindow):
         self.vfs_path = vfs_path
         self.script_path = script_path
         self.vfs = VFS()
+        self.history = []
 
         self.log = QTextEdit()
         self.log.setReadOnly(True)
@@ -86,7 +113,7 @@ class MainWindow(QMainWindow):
         container.setLayout(layout)
         self.setCentralWidget(container)
 
-        self.log.append("Эмулятор запущен. Команды: ls, cd, exit")
+        self.log.append("Эмулятор запущен. Команды: ls, cd, pwd, history, exit")
         self.log.append(f"[config] vfs={self.vfs_path}")
         self.log.append(f"[config] script={self.script_path}")
 
@@ -114,10 +141,11 @@ class MainWindow(QMainWindow):
         command, args = parse_command(line)
         if command is None:
             return True
+        self.history.append(" ".join([command] + args))
         if command == "exit":
             self.close()
             return False
-        result = run_command(command, args, self.vfs)
+        result = run_command(command, args, self.vfs, self.history)
         if result:
             self.log.append(result)
         return True

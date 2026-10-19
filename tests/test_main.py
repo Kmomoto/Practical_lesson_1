@@ -101,6 +101,56 @@ class TestRunCommand(unittest.TestCase):
             "Ошибка: cd не принимает более одного аргумента",
         )
 
+    def test_pwd(self):
+        self.assertEqual(main.run_command("pwd", [], self.vfs), "/")
+        main.run_command("cd", ["docs"], self.vfs)
+        self.assertEqual(main.run_command("pwd", [], self.vfs), "/docs")
+
+    def test_pwd_with_args(self):
+        self.assertEqual(
+            main.run_command("pwd", ["x"], self.vfs),
+            "Ошибка: pwd не принимает аргументов",
+        )
+
+    def test_history_all(self):
+        history = ["ls", "cd docs", "history"]
+        self.assertEqual(
+            main.run_command("history", [], self.vfs, history),
+            "1 ls\n2 cd docs\n3 history",
+        )
+
+    def test_history_last_n_keeps_numbers(self):
+        history = ["ls", "cd docs", "pwd", "history 2"]
+        self.assertEqual(
+            main.run_command("history", ["2"], self.vfs, history),
+            "3 pwd\n4 history 2",
+        )
+
+    def test_history_zero_and_too_large(self):
+        history = ["ls", "history 0"]
+        self.assertEqual(main.run_command("history", ["0"], self.vfs, history), "")
+        self.assertEqual(
+            main.run_command("history", ["100"], self.vfs, history),
+            "1 ls\n2 history 0",
+        )
+
+    def test_history_without_list_is_empty(self):
+        self.assertEqual(main.run_command("history", [], self.vfs), "")
+
+    def test_history_errors(self):
+        self.assertEqual(
+            main.run_command("history", ["abc"], self.vfs, ["x"]),
+            "Ошибка: history: неверный аргумент: abc",
+        )
+        self.assertEqual(
+            main.run_command("history", ["-1"], self.vfs, ["x"]),
+            "Ошибка: history: неверный аргумент: -1",
+        )
+        self.assertEqual(
+            main.run_command("history", ["1", "2"], self.vfs, ["x"]),
+            "Ошибка: history не принимает более одного аргумента",
+        )
+
     def test_unknown_command(self):
         self.assertEqual(
             main.run_command("abc", [], self.vfs),
@@ -207,6 +257,44 @@ class TestWindowWithVFS(WindowTestCase):
             self.log_lines(self.window)[-2:],
             ["/> cd readme.txt", "Ошибка: cd: не является каталогом: readme.txt"],
         )
+
+
+class TestWindowHistory(WindowTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.window = self.make_window(vfs_path=self.make_vfs())
+
+    def test_pwd_output(self):
+        self.type_command(self.window, "cd docs")
+        self.type_command(self.window, "pwd")
+        self.assertEqual(
+            self.log_lines(self.window)[-2:], ["/docs> pwd", "/docs"]
+        )
+
+    def test_history_records_commands_including_errors_and_itself(self):
+        self.type_command(self.window, "ls")
+        self.type_command(self.window, "abc")
+        self.type_command(self.window, "")
+        self.type_command(self.window, "   ")
+        self.type_command(self.window, "cd   docs")
+        self.type_command(self.window, "history")
+        self.assertEqual(
+            self.log_lines(self.window)[-5:],
+            ["/docs> history", "1 ls", "2 abc", "3 cd docs", "4 history"],
+        )
+
+    def test_history_last_n(self):
+        for command in ("ls", "pwd", "cd docs", "history 2"):
+            self.type_command(self.window, command)
+        self.assertEqual(
+            self.log_lines(self.window)[-2:], ["3 cd docs", "4 history 2"]
+        )
+
+    def test_script_commands_are_in_history(self):
+        script = self.write_script("ls\npwd\n")
+        window = self.make_window(vfs_path=self.make_vfs(), script_path=script)
+        self.assertEqual(window.history, ["ls", "pwd"])
 
 
 class TestWindowConfig(WindowTestCase):

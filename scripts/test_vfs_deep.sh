@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # VFS с глубокой вложенностью (до 4 уровней: docs/manual/chapter1/intro.txt),
 # пустым каталогом projects/empty и записями о каталогах в архиве.
-# Выполняет общий стартовый скрипт start_all.txt (он заканчивается командой exit,
-# поэтому окно закроется само; чтобы посмотреть результат, уберите exit в конце).
-# Запуск: ./scripts/test_vfs_deep.sh   (интерпретатор: PYTHON=python3.13 ...)
+# Выполняет стартовый скрипт эмулятора: по умолчанию start_all.txt (этапы 1-3,
+# заканчивается командой exit, поэтому окно закроется само; чтобы посмотреть
+# результат, уберите exit в конце) или скрипт, указанный первым аргументом.
+# Запуск: ./scripts/test_vfs_deep.sh [скрипт]   (интерпретатор: PYTHON=python3.13 ...)
+# Этап 4:  ./scripts/test_vfs_deep.sh scripts/start_stage4.txt
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON="${PYTHON:-python3}"
+SCRIPT="${1:-$ROOT/scripts/start_all.txt}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -23,4 +26,4 @@ echo "int main() { return 0; }" > "$T/projects/alpha/src/main.c"
 
 "$PYTHON" "$ROOT/src/main.py" \
     --vfs "$TMP/deep.zip" \
-    --script "$ROOT/scripts/start_all.txt"
+    --script "$SCRIPT"
