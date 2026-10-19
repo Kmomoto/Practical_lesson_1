@@ -1,0 +1,89 @@
+# Стартовый скрипт этапа 5: rmdir и mv (изменения только в памяти).
+# Запуск: ./scripts/test_vfs_stage5.sh
+# Исходная VFS: readme.txt, notes.txt, docs/{guide.txt,manual/index.txt},
+# archive/, empty1/, empty2/, trash/old/cache/, deep/{f.txt,inner/},
+# full/file.txt, a/x/y.txt, b/x/z.txt, inbox/{a.txt,b.txt}, p/q/, r/q/
+ls
+
+# ===================== rmdir =====================
+# --- один пустой каталог
+rmdir empty1
+ls
+# --- несколько каталогов: ошибка по одному не мешает остальным
+rmdir empty2 missing
+ls
+# --- -p: удаляется вся цепочка пустых каталогов
+rmdir -p trash/old/cache
+ls
+# --- -p останавливается на непустом родителе
+rmdir -p deep/inner
+ls deep
+# --- ошибки: непустой каталог, файл, корень, нет пути, нет аргументов, параметр
+rmdir full
+rmdir readme.txt
+rmdir /
+rmdir missing
+rmdir
+rmdir -x
+# --- нельзя удалить текущий каталог и его родителей
+cd archive
+rmdir .
+rmdir ..
+rmdir /archive
+cd /
+
+# ======================= mv =======================
+# --- переименование файла
+mv notes.txt notes_old.txt
+ls
+# --- перемещение файла в каталог
+mv notes_old.txt archive
+ls archive
+# --- перемещение с новым именем, абсолютный путь
+mv archive/notes_old.txt /docs/notes.txt
+ls docs
+# --- замена существующего файла
+mv inbox/a.txt inbox/b.txt
+ls inbox
+# --- переименование каталога
+mv inbox mailbox
+ls
+# --- перемещение каталога в каталог
+mv mailbox archive
+ls archive
+# --- несколько источников в каталог
+mv readme.txt docs/notes.txt archive
+ls archive
+ls docs
+# --- относительные пути из подкаталога
+cd docs
+mv guide.txt ../archive
+ls
+ls ../archive
+cd /
+# --- замена пустого каталога
+mv p/q r
+ls p
+ls r
+# --- ошибки
+mv
+mv docs
+mv nope docs
+mv docs/manual nope/x
+mv docs docs/manual
+mv docs docs
+mv full .
+mv / docs
+mv docs archive/readme.txt
+mv a/x b
+mv docs full archive/readme.txt
+# --- нельзя переместить текущий каталог и его родителей
+cd docs/manual
+mv /docs /x
+mv .. /x
+cd /
+
+# --- итог
+pwd
+ls
+history 5

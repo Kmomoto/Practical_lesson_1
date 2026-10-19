@@ -158,6 +158,103 @@ class TestRunCommand(unittest.TestCase):
         )
 
 
+class TestRunModifyingCommands(unittest.TestCase):
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.vfs = VFS.from_zip(
+            make_zip(
+                tmp.name,
+                {
+                    "a.txt": "A",
+                    "b.txt": "B",
+                    "e/": "",
+                    "e2/": "",
+                    "full/f.txt": "x",
+                    "t/o/c/": "",
+                },
+            )
+        )
+
+    def run_cmd(self, command, *args):
+        return main.run_command(command, list(args), self.vfs)
+
+    def test_rmdir(self):
+        self.assertEqual(self.run_cmd("rmdir", "e"), "")
+        self.assertNotIn("e/", self.vfs.listdir())
+
+    def test_rmdir_several_directories_reports_each_error(self):
+        self.assertEqual(
+            self.run_cmd("rmdir", "e", "nope", "e2"),
+            "Ошибка: rmdir: нет такого файла или каталога: nope",
+        )
+        self.assertNotIn("e/", self.vfs.listdir())
+        self.assertNotIn("e2/", self.vfs.listdir())
+
+    def test_rmdir_parents(self):
+        self.assertEqual(self.run_cmd("rmdir", "-p", "t/o/c"), "")
+        self.assertNotIn("t/", self.vfs.listdir())
+
+    def test_rmdir_errors(self):
+        self.assertEqual(
+            self.run_cmd("rmdir", "full"), "Ошибка: rmdir: каталог не пуст: full"
+        )
+        self.assertEqual(
+            self.run_cmd("rmdir", "a.txt"),
+            "Ошибка: rmdir: не является каталогом: a.txt",
+        )
+        self.assertEqual(
+            self.run_cmd("rmdir"), "Ошибка: rmdir: не указан каталог"
+        )
+        self.assertEqual(
+            self.run_cmd("rmdir", "-p"), "Ошибка: rmdir: не указан каталог"
+        )
+        self.assertEqual(
+            self.run_cmd("rmdir", "-x", "e"),
+            "Ошибка: rmdir: неизвестный параметр: -x",
+        )
+        self.assertIn("e/", self.vfs.listdir())
+
+    def test_mv_rename_and_move(self):
+        self.assertEqual(self.run_cmd("mv", "a.txt", "c.txt"), "")
+        self.assertEqual(self.run_cmd("mv", "c.txt", "e"), "")
+        self.assertEqual(self.vfs.listdir("e"), ["c.txt"])
+
+    def test_mv_several_sources_into_directory(self):
+        self.assertEqual(self.run_cmd("mv", "a.txt", "b.txt", "e"), "")
+        self.assertEqual(self.vfs.listdir("e"), ["a.txt", "b.txt"])
+
+    def test_mv_several_sources_target_is_not_directory(self):
+        self.assertEqual(
+            self.run_cmd("mv", "a.txt", "e", "b.txt"),
+            "Ошибка: mv: целевой путь не является каталогом: b.txt",
+        )
+        self.assertIn("a.txt", self.vfs.listdir())
+
+    def test_mv_reports_each_error_and_continues(self):
+        self.assertEqual(
+            self.run_cmd("mv", "nope", "a.txt", "e"),
+            "Ошибка: mv: нет такого файла или каталога: nope",
+        )
+        self.assertEqual(self.vfs.listdir("e"), ["a.txt"])
+
+    def test_mv_not_enough_arguments(self):
+        message = "Ошибка: mv: не хватает аргументов"
+        self.assertEqual(self.run_cmd("mv"), message)
+        self.assertEqual(self.run_cmd("mv", "a.txt"), message)
+
+    def test_mv_error(self):
+        self.assertEqual(
+            self.run_cmd("mv", "full", "full"),
+            "Ошибка: mv: нельзя переместить каталог в самого себя: full",
+        )
+        self.assertEqual(
+            self.run_cmd("mv", "a.txt", "nope/x"),
+            "Ошибка: mv: нет такого файла или каталога: nope/x",
+        )
+
+
 class WindowTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -295,6 +392,34 @@ class TestWindowHistory(WindowTestCase):
         script = self.write_script("ls\npwd\n")
         window = self.make_window(vfs_path=self.make_vfs(), script_path=script)
         self.assertEqual(window.history, ["ls", "pwd"])
+
+
+class TestWindowModifyingCommands(WindowTestCase):
+
+    def setUp(self):
+        super().setUp()
+        path = make_zip(self.tmp, {"a.txt": "A", "e/": "", "docs/g.txt": "g"})
+        self.window = self.make_window(vfs_path=path)
+
+    def test_mv_and_ls(self):
+        self.type_command(self.window, "mv a.txt e")
+        self.type_command(self.window, "ls e")
+        self.assertEqual(
+            self.log_lines(self.window)[-3:], ["/> mv a.txt e", "/> ls e", "a.txt"]
+        )
+
+    def test_rmdir_error_is_logged(self):
+        self.type_command(self.window, "rmdir docs")
+        self.assertEqual(
+            self.log_lines(self.window)[-2:],
+            ["/> rmdir docs", "Ошибка: rmdir: каталог не пуст: docs"],
+        )
+
+    def test_changes_are_only_in_memory(self):
+        self.type_command(self.window, "rmdir e")
+        self.assertEqual(os.listdir(self.tmp), ["test.zip"])
+        reloaded = main.VFS.from_zip(os.path.join(self.tmp, "test.zip"))
+        self.assertIn("e/", reloaded.listdir())
 
 
 class TestWindowConfig(WindowTestCase):

@@ -141,6 +141,190 @@ class TestNavigation(VFSTestCase):
         self.assertEqual(self.vfs.pwd(), "/docs")
 
 
+class TestRmdir(VFSTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.vfs = self.load({
+            "a/b/c/": "",
+            "full/f.txt": "x",
+            "e/": "",
+            "file.txt": "x",
+        })
+
+    def test_removes_empty_directory(self):
+        self.vfs.rmdir("e")
+        self.assertEqual(self.vfs.listdir(), ["a/", "file.txt", "full/"])
+
+    def test_not_empty(self):
+        with self.assertRaises(VFSError):
+            self.vfs.rmdir("full")
+        self.assertEqual(self.vfs.listdir("full"), ["f.txt"])
+
+    def test_file_is_not_a_directory(self):
+        with self.assertRaises(VFSError):
+            self.vfs.rmdir("file.txt")
+
+    def test_missing(self):
+        with self.assertRaises(VFSError):
+            self.vfs.rmdir("nope")
+
+    def test_root(self):
+        with self.assertRaises(VFSError):
+            self.vfs.rmdir("/")
+        with self.assertRaises(VFSError):
+            self.vfs.rmdir("a/..")
+
+    def test_parents_removes_whole_chain(self):
+        self.vfs.rmdir("a/b/c", parents=True)
+        self.assertEqual(self.vfs.listdir(), ["e/", "file.txt", "full/"])
+
+    def test_without_parents_keeps_ancestors(self):
+        self.vfs.rmdir("a/b/c")
+        self.assertEqual(self.vfs.listdir("a/b"), [])
+
+    def test_parents_stops_at_non_empty_ancestor(self):
+        vfs = self.load({"d/inner/": "", "d/f.txt": "x"})
+        with self.assertRaises(VFSError):
+            vfs.rmdir("d/inner", parents=True)
+        self.assertEqual(vfs.listdir("d"), ["f.txt"])
+
+    def test_current_directory_and_parents_are_busy(self):
+        self.vfs.chdir("a/b")
+        for path in ("/a/b", ".", "..", "/a"):
+            with self.assertRaises(VFSError):
+                self.vfs.rmdir(path)
+        self.assertEqual(self.vfs.pwd(), "/a/b")
+
+    def test_child_of_current_directory_can_be_removed(self):
+        self.vfs.chdir("a/b")
+        self.vfs.rmdir("c")
+        self.assertEqual(self.vfs.listdir(), [])
+
+
+class TestMove(VFSTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.vfs = self.load({
+            "a.txt": "A",
+            "b.txt": "B",
+            "d/x.txt": "X",
+            "d/sub/y.txt": "Y",
+            "e/": "",
+            "full/z.txt": "Z",
+        })
+
+    def test_rename_file(self):
+        self.vfs.move("a.txt", "c.txt")
+        self.assertEqual(
+            self.vfs.listdir(), ["b.txt", "c.txt", "d/", "e/", "full/"]
+        )
+        self.assertEqual(self.vfs.read_base64("c.txt"), "QQ==")
+        self.assertEqual(self.vfs.listdir("c.txt"), ["c.txt"])
+
+    def test_move_file_into_directory(self):
+        self.vfs.move("a.txt", "e")
+        self.assertEqual(self.vfs.listdir("e"), ["a.txt"])
+        self.assertNotIn("a.txt", self.vfs.listdir())
+
+    def test_move_into_directory_with_trailing_slash(self):
+        self.vfs.move("a.txt", "e/")
+        self.assertEqual(self.vfs.listdir("e"), ["a.txt"])
+
+    def test_move_with_new_name(self):
+        self.vfs.move("a.txt", "e/n.txt")
+        self.assertEqual(self.vfs.listdir("e"), ["n.txt"])
+
+    def test_overwrite_file(self):
+        self.vfs.move("a.txt", "b.txt")
+        self.assertEqual(self.vfs.listdir()[:1], ["b.txt"])
+        self.assertNotIn("a.txt", self.vfs.listdir())
+        self.assertEqual(self.vfs.read_base64("b.txt"), "QQ==")
+
+    def test_move_directory_into_directory(self):
+        self.vfs.move("d/sub", "e")
+        self.assertEqual(self.vfs.listdir("e"), ["sub/"])
+        self.assertEqual(self.vfs.listdir("e/sub"), ["y.txt"])
+        self.assertEqual(self.vfs.listdir("d"), ["x.txt"])
+
+    def test_rename_directory(self):
+        self.vfs.move("d", "dd")
+        self.assertIn("dd/", self.vfs.listdir())
+        self.assertNotIn("d/", self.vfs.listdir())
+        self.assertEqual(self.vfs.listdir("dd/sub"), ["y.txt"])
+
+    def test_replace_empty_directory(self):
+        vfs = self.load({"p/q/": "", "r/q/": ""})
+        vfs.move("p/q", "r")
+        self.assertEqual(vfs.listdir("p"), [])
+        self.assertEqual(vfs.listdir("r"), ["q/"])
+
+    def test_do_not_replace_non_empty_directory(self):
+        vfs = self.load({"p/q/f": "1", "r/q/g": "2"})
+        with self.assertRaises(VFSError):
+            vfs.move("p/q", "r")
+        self.assertEqual(vfs.listdir("p"), ["q/"])
+        self.assertEqual(vfs.listdir("r/q"), ["g"])
+
+    def test_directory_over_file(self):
+        with self.assertRaises(VFSError):
+            self.vfs.move("d", "a.txt")
+
+    def test_directory_into_itself(self):
+        for dst in ("d/sub", "d", "d/sub/.."):
+            with self.assertRaises(VFSError):
+                self.vfs.move("d", dst)
+        self.assertEqual(self.vfs.listdir("d"), ["sub/", "x.txt"])
+
+    def test_same_object(self):
+        with self.assertRaises(VFSError):
+            self.vfs.move("a.txt", "a.txt")
+        with self.assertRaises(VFSError):
+            self.vfs.move("a.txt", ".")
+        self.assertEqual(self.vfs.read_base64("a.txt"), "QQ==")
+
+    def test_root(self):
+        with self.assertRaises(VFSError):
+            self.vfs.move("/", "e")
+
+    def test_missing_source_and_destination_parent(self):
+        with self.assertRaises(VFSError):
+            self.vfs.move("nope", "e")
+        with self.assertRaises(VFSError):
+            self.vfs.move("a.txt", "nope/x")
+        with self.assertRaises(VFSError):
+            self.vfs.move("a.txt", "b.txt/x")
+        self.assertIn("a.txt", self.vfs.listdir())
+
+    def test_current_directory_and_parents_are_busy(self):
+        self.vfs.chdir("d/sub")
+        for src in ("/d", "..", "/d/sub", "."):
+            with self.assertRaises(VFSError):
+                self.vfs.move(src, "/e")
+        self.assertEqual(self.vfs.pwd(), "/d/sub")
+
+    def test_cannot_replace_current_directory(self):
+        vfs = self.load({"p/q/": "", "r/q/": ""})
+        vfs.chdir("r/q")
+        with self.assertRaises(VFSError):
+            vfs.move("/p/q", "/r")
+        self.assertEqual(vfs.listdir("/p"), ["q/"])
+
+    def test_move_inside_current_directory_tree(self):
+        self.vfs.chdir("d")
+        self.vfs.move("sub", "/e")
+        self.assertEqual(self.vfs.listdir("/e"), ["sub/"])
+        self.vfs.move("x.txt", "../e")
+        self.assertEqual(self.vfs.listdir("/e"), ["sub/", "x.txt"])
+
+    def test_isdir(self):
+        self.assertTrue(self.vfs.isdir("d"))
+        self.assertTrue(self.vfs.isdir("/"))
+        self.assertFalse(self.vfs.isdir("a.txt"))
+        self.assertFalse(self.vfs.isdir("nope"))
+
+
 class TestBase64(VFSTestCase):
 
     def test_binary_file(self):

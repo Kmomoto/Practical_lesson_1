@@ -59,6 +59,44 @@ def run_history(args, history):
     return "\n".join(lines)
 
 
+def run_rmdir(args, vfs):
+    """rmdir [-p] КАТАЛОГ...: удалить пустые каталоги VFS."""
+    parents = False
+    paths = []
+    for arg in args:
+        if arg == "-p":
+            parents = True
+        elif arg.startswith("-") and len(arg) > 1:
+            return "Ошибка: rmdir: неизвестный параметр: " + arg
+        else:
+            paths.append(arg)
+    if not paths:
+        return "Ошибка: rmdir: не указан каталог"
+    errors = []
+    for path in paths:
+        try:
+            vfs.rmdir(path, parents)
+        except VFSError as error:
+            errors.append("Ошибка: rmdir: " + str(error))
+    return "\n".join(errors)
+
+
+def run_mv(args, vfs):
+    """mv ИСТОЧНИК... ЦЕЛЬ: переместить или переименовать файлы и каталоги."""
+    if len(args) < 2:
+        return "Ошибка: mv: не хватает аргументов"
+    sources, target = args[:-1], args[-1]
+    if len(sources) > 1 and not vfs.isdir(target):
+        return "Ошибка: mv: целевой путь не является каталогом: " + target
+    errors = []
+    for source in sources:
+        try:
+            vfs.move(source, target)
+        except VFSError as error:
+            errors.append("Ошибка: mv: " + str(error))
+    return "\n".join(errors)
+
+
 def run_command(command, args, vfs, history=None):
     """Выполнить команду над VFS и вернуть текст для вывода в лог."""
     if history is None:
@@ -80,6 +118,10 @@ def run_command(command, args, vfs, history=None):
             return vfs.pwd()
         if command == "history":
             return run_history(args, history)
+        if command == "rmdir":
+            return run_rmdir(args, vfs)
+        if command == "mv":
+            return run_mv(args, vfs)
     except VFSError as error:
         return "Ошибка: " + command + ": " + str(error)
     return "Ошибка: команда не найдена: " + command
@@ -113,7 +155,7 @@ class MainWindow(QMainWindow):
         container.setLayout(layout)
         self.setCentralWidget(container)
 
-        self.log.append("Эмулятор запущен. Команды: ls, cd, pwd, history, exit")
+        self.log.append("Эмулятор запущен. Команды: ls, cd, pwd, history, rmdir, mv, exit")
         self.log.append(f"[config] vfs={self.vfs_path}")
         self.log.append(f"[config] script={self.script_path}")
 
