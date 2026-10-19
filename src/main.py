@@ -3,6 +3,7 @@ import getpass
 import socket
 import sys
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QLineEdit,
@@ -159,7 +160,9 @@ def main():
     app = QApplication(sys.argv)
     window = MainWindow(vfs_path=args.vfs, script_path=args.script)
     window.show()
-    window.run_startup_script()
+    # Скрипт запускается уже внутри цикла событий: иначе exit в скрипте
+    # закрыл бы окно до app.exec(), и приложение осталось бы работать без окна.
+    QTimer.singleShot(0, window.run_startup_script)
     sys.exit(app.exec())
 
 
