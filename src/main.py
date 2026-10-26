@@ -1,3 +1,5 @@
+"""Эмулятор языка оболочки ОС: окно PySide6, разбор и запуск команд."""
+
 import argparse
 import getpass
 import socket
@@ -14,6 +16,13 @@ from PySide6.QtWidgets import (
 )
 
 from vfs import VFS, VFSError
+
+MV_MIN_ARGS = 2
+WINDOW_WIDTH = 700
+WINDOW_HEIGHT = 450
+WELCOME_TEXT = (
+    "Эмулятор запущен. Команды: ls, cd, pwd, history, rmdir, mv, exit"
+)
 
 
 def make_title():
@@ -37,7 +46,9 @@ def parse_args():
     """Разобрать аргументы командной строки: пути к VFS и стартовому скрипту."""
     parser = argparse.ArgumentParser(description="Эмулятор языка оболочки ОС")
     parser.add_argument("--vfs", default=None, help="путь к ZIP-архиву с VFS")
-    parser.add_argument("--script", default=None, help="путь к стартовому скрипту")
+    parser.add_argument(
+        "--script", default=None, help="путь к стартовому скрипту"
+    )
     return parser.parse_args()
 
 
@@ -83,7 +94,7 @@ def run_rmdir(args, vfs):
 
 def run_mv(args, vfs):
     """mv ИСТОЧНИК... ЦЕЛЬ: переместить или переименовать файлы и каталоги."""
-    if len(args) < 2:
+    if len(args) < MV_MIN_ARGS:
         return "Ошибка: mv: не хватает аргументов"
     sources, target = args[:-1], args[-1]
     if len(sources) > 1 and not vfs.isdir(target):
@@ -97,31 +108,48 @@ def run_mv(args, vfs):
     return "\n".join(errors)
 
 
+def run_ls(args, vfs):
+    """ls [КАТАЛОГ]: показать содержимое каталога VFS."""
+    if len(args) > 1:
+        return "Ошибка: ls не принимает более одного аргумента"
+    path = args[0] if args else None
+    return "\n".join(vfs.listdir(path))
+
+
+def run_cd(args, vfs):
+    """cd [КАТАЛОГ]: сменить текущий каталог (без аргумента - корень)."""
+    if len(args) > 1:
+        return "Ошибка: cd не принимает более одного аргумента"
+    vfs.chdir(args[0] if args else "/")
+    return ""
+
+
+def run_pwd(args, vfs):
+    """pwd: показать текущий каталог."""
+    if args:
+        return "Ошибка: pwd не принимает аргументов"
+    return vfs.pwd()
+
+
+COMMANDS = {
+    "ls": run_ls,
+    "cd": run_cd,
+    "pwd": run_pwd,
+    "rmdir": run_rmdir,
+    "mv": run_mv,
+}
+
+
 def run_command(command, args, vfs, history=None):
     """Выполнить команду над VFS и вернуть текст для вывода в лог."""
     if history is None:
         history = []
     try:
-        if command == "ls":
-            if len(args) > 1:
-                return "Ошибка: ls не принимает более одного аргумента"
-            path = args[0] if args else None
-            return "\n".join(vfs.listdir(path))
-        if command == "cd":
-            if len(args) > 1:
-                return "Ошибка: cd не принимает более одного аргумента"
-            vfs.chdir(args[0] if args else "/")
-            return ""
-        if command == "pwd":
-            if args:
-                return "Ошибка: pwd не принимает аргументов"
-            return vfs.pwd()
         if command == "history":
             return run_history(args, history)
-        if command == "rmdir":
-            return run_rmdir(args, vfs)
-        if command == "mv":
-            return run_mv(args, vfs)
+        handler = COMMANDS.get(command)
+        if handler is not None:
+            return handler(args, vfs)
     except VFSError as error:
         return "Ошибка: " + command + ": " + str(error)
     return "Ошибка: команда не найдена: " + command
@@ -131,10 +159,11 @@ class MainWindow(QMainWindow):
     """Главное окно эмулятора: лог диалога и строка ввода."""
 
     def __init__(self, vfs_path=None, script_path=None):
+        """Создать окно; vfs_path и script_path необязательны."""
         super().__init__()
 
         self.setWindowTitle(make_title())
-        self.resize(700, 450)
+        self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
 
         self.vfs_path = vfs_path
         self.script_path = script_path
@@ -155,7 +184,7 @@ class MainWindow(QMainWindow):
         container.setLayout(layout)
         self.setCentralWidget(container)
 
-        self.log.append("Эмулятор запущен. Команды: ls, cd, pwd, history, rmdir, mv, exit")
+        self.log.append(WELCOME_TEXT)
         self.log.append(f"[config] vfs={self.vfs_path}")
         self.log.append(f"[config] script={self.script_path}")
 
@@ -204,7 +233,7 @@ class MainWindow(QMainWindow):
             self.run_script(self.script_path)
 
     def run_script(self, path):
-        """Выполнить стартовый скрипт построчно, имитируя диалог с пользователем."""
+        """Выполнить стартовый скрипт построчно, как диалог с пользователем."""
         try:
             with open(path, encoding="utf-8") as script_file:
                 lines = script_file.readlines()
@@ -225,13 +254,16 @@ class MainWindow(QMainWindow):
 
 
 def main():
-    """Запустить приложение эмулятора."""
+    """Запустить приложение эмулятора.
+
+    Стартовый скрипт запускается уже внутри цикла событий: иначе exit
+    в скрипте закрыл бы окно до app.exec(), и приложение осталось бы
+    работать без окна.
+    """
     args = parse_args()
     app = QApplication(sys.argv)
     window = MainWindow(vfs_path=args.vfs, script_path=args.script)
     window.show()
-    # Скрипт запускается уже внутри цикла событий: иначе exit в скрипте
-    # закрыл бы окно до app.exec(), и приложение осталось бы работать без окна.
     QTimer.singleShot(0, window.run_startup_script)
     sys.exit(app.exec())
 

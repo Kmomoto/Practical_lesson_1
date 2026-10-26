@@ -13,7 +13,7 @@ from helpers import make_zip
 
 class VFSTestCase(unittest.TestCase):
 
-    def setUp(self):
+    def setup_method(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.tmp = tmp.name
@@ -70,8 +70,8 @@ class TestLoading(VFSTestCase):
 
 class TestNavigation(VFSTestCase):
 
-    def setUp(self):
-        super().setUp()
+    def setup_method(self):
+        super().setup_method()
         self.vfs = self.load({
             "readme.txt": "r",
             "docs/guide.txt": "g",
@@ -110,7 +110,9 @@ class TestNavigation(VFSTestCase):
     def test_ls_with_paths(self):
         self.vfs.chdir("docs")
         self.assertEqual(self.vfs.listdir(), ["guide.txt", "manual/"])
-        self.assertEqual(self.vfs.listdir(".."), ["docs/", "projects/", "readme.txt"])
+        self.assertEqual(
+            self.vfs.listdir(".."), ["docs/", "projects/", "readme.txt"]
+        )
         self.assertEqual(self.vfs.listdir("/projects"), [])
 
     def test_ls_of_file(self):
@@ -143,8 +145,8 @@ class TestNavigation(VFSTestCase):
 
 class TestRmdir(VFSTestCase):
 
-    def setUp(self):
-        super().setUp()
+    def setup_method(self):
+        super().setup_method()
         self.vfs = self.load({
             "a/b/c/": "",
             "full/f.txt": "x",
@@ -204,8 +206,8 @@ class TestRmdir(VFSTestCase):
 
 class TestMove(VFSTestCase):
 
-    def setUp(self):
-        super().setUp()
+    def setup_method(self):
+        super().setup_method()
         self.vfs = self.load({
             "a.txt": "A",
             "b.txt": "B",

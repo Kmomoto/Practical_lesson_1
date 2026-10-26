@@ -9,6 +9,26 @@ import zipfile
 import zlib
 
 
+NO_SUCH = "нет такого файла или каталога: "
+NOT_DIR = "не является каталогом: "
+NAME_CLASH = "в архиве файл и каталог с одним именем: "
+
+
+def split_entry_name(name):
+    """Разбить имя записи архива на части, отбросив пустые и '.'."""
+    parts = [p for p in name.split("/") if p not in ("", ".")]
+    if ".." in parts:
+        raise VFSError("недопустимый путь в архиве: " + name)
+    return parts
+
+
+def parent_path(trimmed, head):
+    """Путь к каталогу, в котором лежит последний элемент trimmed."""
+    if head:
+        return head
+    return "/" if trimmed.startswith("/") else "."
+
+
 class VFSError(Exception):
     """Ошибка работы с VFS. Текст ошибки показывается пользователю."""
 
@@ -17,6 +37,7 @@ class Node:
     """Узел дерева VFS: каталог (с потомками) или файл (с содержимым)."""
 
     def __init__(self, name, is_dir, data=b""):
+        """Создать узел: имя, признак каталога и содержимое файла."""
         self.name = name
         self.is_dir = is_dir
         self.data = data
@@ -27,6 +48,7 @@ class VFS:
     """Дерево каталогов и файлов в памяти плюс текущий каталог."""
 
     def __init__(self):
+        """Создать пустую VFS с корнем и текущим каталогом /."""
         self.root = Node("", True)
         self.cwd = []
 
@@ -52,28 +74,34 @@ class VFS:
 
     def _add_entry(self, name, is_dir, data):
         """Добавить в дерево запись архива, создав промежуточные каталоги."""
-        parts = [p for p in name.split("/") if p not in ("", ".")]
-        if ".." in parts:
-            raise VFSError("недопустимый путь в архиве: " + name)
+        parts = split_entry_name(name)
         if not parts:
             return
-
-        node = self.root
         dirs = parts if is_dir else parts[:-1]
+        node = self._make_dirs(dirs, name)
+        if not is_dir:
+            self._add_file(node, parts[-1], data, name)
+
+    def _make_dirs(self, dirs, name):
+        """Создать недостающие каталоги цепочки и вернуть последний."""
+        node = self.root
         for part in dirs:
             child = node.children.get(part)
             if child is None:
                 child = Node(part, True)
                 node.children[part] = child
             elif not child.is_dir:
-                raise VFSError("в архиве файл и каталог с одним именем: " + name)
+                raise VFSError(NAME_CLASH + name)
             node = child
+        return node
 
-        if not is_dir:
-            existing = node.children.get(parts[-1])
-            if existing is not None and existing.is_dir:
-                raise VFSError("в архиве файл и каталог с одним именем: " + name)
-            node.children[parts[-1]] = Node(parts[-1], False, data)
+    @staticmethod
+    def _add_file(node, file_name, data, name):
+        """Положить файл в каталог node; name - исходное имя записи."""
+        existing = node.children.get(file_name)
+        if existing is not None and existing.is_dir:
+            raise VFSError(NAME_CLASH + name)
+        node.children[file_name] = Node(file_name, False, data)
 
     def _resolve(self, path):
         """Разобрать путь (абсолютный или относительный) по узлам дерева.
@@ -91,7 +119,7 @@ class VFS:
             if part in ("", "."):
                 continue
             if not nodes[-1].is_dir:
-                raise VFSError("не является каталогом: " + path)
+                raise VFSError(NOT_DIR + path)
             if part == "..":
                 if names:
                     names.pop()
@@ -99,7 +127,7 @@ class VFS:
                 continue
             child = nodes[-1].children.get(part)
             if child is None:
-                raise VFSError("нет такого файла или каталога: " + path)
+                raise VFSError(NO_SUCH + path)
             names.append(part)
             nodes.append(child)
         return names, nodes
@@ -133,7 +161,7 @@ class VFS:
         """Сделать каталог по указанному пути текущим."""
         names, node = self._lookup(path)
         if not node.is_dir:
-            raise VFSError("не является каталогом: " + path)
+            raise VFSError(NOT_DIR + path)
         self.cwd = names
 
     def read_base64(self, path):
@@ -155,7 +183,7 @@ class VFS:
         if not names:
             raise VFSError("нельзя удалить корневой каталог: " + shown)
         if not nodes[-1].is_dir:
-            raise VFSError("не является каталогом: " + shown)
+            raise VFSError(NOT_DIR + shown)
         if nodes[-1].children:
             raise VFSError("каталог не пуст: " + shown)
         if self.cwd[: len(names)] == names:
@@ -184,73 +212,66 @@ class VFS:
         Существующий файл заменяется, пустой каталог тоже; непустой - нет.
         """
         s_names, s_nodes = self._resolve(src)
-        if not s_names:
-            raise VFSError("нельзя переместить корневой каталог: " + src)
         node = s_nodes[-1]
-        s_parent = s_nodes[-2]
-        if node.is_dir and self.cwd[: len(s_names)] == s_names:
-            raise VFSError(
-                "нельзя переместить текущий каталог или его родителя: " + src
-            )
-
-        try:
-            d_names, d_nodes = self._resolve(dst)
-        except VFSError:
-            d_names = None
-
-        if d_names is not None and d_nodes[-1].is_dir:
-            # dst - существующий каталог: перемещаем внутрь него
-            t_names = d_names
-            t_parent = d_nodes[-1]
-            t_name = s_names[-1]
-            shown = dst.rstrip("/") + "/" + t_name
-        elif d_names is not None:
-            # dst - существующий файл: он будет заменён
-            t_names = d_names[:-1]
-            t_parent = d_nodes[-2]
-            t_name = d_names[-1]
-            shown = dst
-        else:
-            # dst не существует: это новое имя внутри существующего каталога
-            trimmed = dst.rstrip("/")
-            head, _, tail = trimmed.rpartition("/")
-            if tail in ("", ".", ".."):
-                raise VFSError("нет такого файла или каталога: " + dst)
-            if head:
-                parent_path = head
-            elif trimmed.startswith("/"):
-                parent_path = "/"
-            else:
-                parent_path = "."
-            try:
-                t_names, t_nodes = self._resolve(parent_path)
-            except VFSError:
-                raise VFSError("нет такого файла или каталога: " + dst)
-            t_parent = t_nodes[-1]
-            if not t_parent.is_dir:
-                raise VFSError("не является каталогом: " + dst)
-            t_name = tail
-            shown = dst
-
+        self._check_movable(src, s_names, node)
+        t_names, t_parent, t_name, shown = self._find_target(s_names[-1], dst)
         existing = t_parent.children.get(t_name)
         if existing is node:
             raise VFSError(src + " и " + shown + " - один и тот же объект")
         if node.is_dir and t_names[: len(s_names)] == s_names:
             raise VFSError("нельзя переместить каталог в самого себя: " + src)
-        if existing is not None:
-            if existing.is_dir and not node.is_dir:
-                raise VFSError("нельзя заменить каталог файлом: " + shown)
-            if node.is_dir and not existing.is_dir:
-                raise VFSError("нельзя заменить файл каталогом: " + shown)
-            if existing.is_dir:
-                if existing.children:
-                    raise VFSError("каталог не пуст: " + shown)
-                if self.cwd[: len(t_names) + 1] == t_names + [t_name]:
-                    raise VFSError(
-                        "нельзя заменить текущий каталог или его родителя: "
-                        + shown
-                    )
-
-        del s_parent.children[s_names[-1]]
+        self._check_replace(existing, node, t_names, t_name, shown)
+        del s_nodes[-2].children[s_names[-1]]
         node.name = t_name
         t_parent.children[t_name] = node
+
+    def _check_movable(self, src, s_names, node):
+        """Проверить, что источник можно перемещать (не корень и не cwd)."""
+        if not s_names:
+            raise VFSError("нельзя переместить корневой каталог: " + src)
+        if node.is_dir and self.cwd[: len(s_names)] == s_names:
+            raise VFSError(
+                "нельзя переместить текущий каталог или его родителя: " + src
+            )
+
+    def _find_target(self, src_name, dst):
+        """Определить цель mv: (имена каталога, каталог, новое имя, путь)."""
+        try:
+            d_names, d_nodes = self._resolve(dst)
+        except VFSError:
+            return self._target_new_name(dst)
+        if d_nodes[-1].is_dir:
+            shown = dst.rstrip("/") + "/" + src_name
+            return d_names, d_nodes[-1], src_name, shown
+        return d_names[:-1], d_nodes[-2], d_names[-1], dst
+
+    def _target_new_name(self, dst):
+        """dst не существует: это новое имя внутри существующего каталога."""
+        trimmed = dst.rstrip("/")
+        head, _, tail = trimmed.rpartition("/")
+        if tail in ("", ".", ".."):
+            raise VFSError(NO_SUCH + dst)
+        try:
+            t_names, t_nodes = self._resolve(parent_path(trimmed, head))
+        except VFSError:
+            raise VFSError(NO_SUCH + dst)
+        if not t_nodes[-1].is_dir:
+            raise VFSError(NOT_DIR + dst)
+        return t_names, t_nodes[-1], tail, dst
+
+    def _check_replace(self, existing, node, t_names, t_name, shown):
+        """Проверить, можно ли заменить existing перемещаемым узлом node."""
+        if existing is None:
+            return
+        if existing.is_dir and not node.is_dir:
+            raise VFSError("нельзя заменить каталог файлом: " + shown)
+        if node.is_dir and not existing.is_dir:
+            raise VFSError("нельзя заменить файл каталогом: " + shown)
+        if not existing.is_dir:
+            return
+        if existing.children:
+            raise VFSError("каталог не пуст: " + shown)
+        if self.cwd[: len(t_names) + 1] == t_names + [t_name]:
+            raise VFSError(
+                "нельзя заменить текущий каталог или его родителя: " + shown
+            )

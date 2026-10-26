@@ -53,7 +53,7 @@ class TestParseCommand(unittest.TestCase):
 
 class TestRunCommand(unittest.TestCase):
 
-    def setUp(self):
+    def setup_method(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.vfs = VFS.from_zip(
@@ -128,7 +128,8 @@ class TestRunCommand(unittest.TestCase):
 
     def test_history_zero_and_too_large(self):
         history = ["ls", "history 0"]
-        self.assertEqual(main.run_command("history", ["0"], self.vfs, history), "")
+        result = main.run_command("history", ["0"], self.vfs, history)
+        self.assertEqual(result, "")
         self.assertEqual(
             main.run_command("history", ["100"], self.vfs, history),
             "1 ls\n2 history 0",
@@ -160,7 +161,7 @@ class TestRunCommand(unittest.TestCase):
 
 class TestRunModifyingCommands(unittest.TestCase):
 
-    def setUp(self):
+    def setup_method(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.vfs = VFS.from_zip(
@@ -198,7 +199,8 @@ class TestRunModifyingCommands(unittest.TestCase):
 
     def test_rmdir_errors(self):
         self.assertEqual(
-            self.run_cmd("rmdir", "full"), "Ошибка: rmdir: каталог не пуст: full"
+            self.run_cmd("rmdir", "full"),
+            "Ошибка: rmdir: каталог не пуст: full",
         )
         self.assertEqual(
             self.run_cmd("rmdir", "a.txt"),
@@ -257,7 +259,7 @@ class TestRunModifyingCommands(unittest.TestCase):
 
 class WindowTestCase(unittest.TestCase):
 
-    def setUp(self):
+    def setup_method(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.tmp = tmp.name
@@ -278,7 +280,11 @@ class WindowTestCase(unittest.TestCase):
     def make_vfs(self):
         return make_zip(
             self.tmp,
-            {"docs/guide.txt": "g", "docs/manual/intro.txt": "i", "readme.txt": "r"},
+            {
+                "docs/guide.txt": "g",
+                "docs/manual/intro.txt": "i",
+                "readme.txt": "r",
+            },
         )
 
     def write_script(self, text):
@@ -299,8 +305,8 @@ class WindowTestCase(unittest.TestCase):
 
 class TestMainWindow(WindowTestCase):
 
-    def setUp(self):
-        super().setUp()
+    def setup_method(self):
+        super().setup_method()
         self.window = self.make_window()
 
     def test_window_title(self):
@@ -326,8 +332,8 @@ class TestMainWindow(WindowTestCase):
 
 class TestWindowWithVFS(WindowTestCase):
 
-    def setUp(self):
-        super().setUp()
+    def setup_method(self):
+        super().setup_method()
         self.window = self.make_window(vfs_path=self.make_vfs())
 
     def test_vfs_loaded_message(self):
@@ -352,14 +358,17 @@ class TestWindowWithVFS(WindowTestCase):
         self.type_command(self.window, "cd readme.txt")
         self.assertEqual(
             self.log_lines(self.window)[-2:],
-            ["/> cd readme.txt", "Ошибка: cd: не является каталогом: readme.txt"],
+            [
+                "/> cd readme.txt",
+                "Ошибка: cd: не является каталогом: readme.txt",
+            ],
         )
 
 
 class TestWindowHistory(WindowTestCase):
 
-    def setUp(self):
-        super().setUp()
+    def setup_method(self):
+        super().setup_method()
         self.window = self.make_window(vfs_path=self.make_vfs())
 
     def test_pwd_output(self):
@@ -396,8 +405,8 @@ class TestWindowHistory(WindowTestCase):
 
 class TestWindowModifyingCommands(WindowTestCase):
 
-    def setUp(self):
-        super().setUp()
+    def setup_method(self):
+        super().setup_method()
         path = make_zip(self.tmp, {"a.txt": "A", "e/": "", "docs/g.txt": "g"})
         self.window = self.make_window(vfs_path=path)
 
@@ -405,7 +414,8 @@ class TestWindowModifyingCommands(WindowTestCase):
         self.type_command(self.window, "mv a.txt e")
         self.type_command(self.window, "ls e")
         self.assertEqual(
-            self.log_lines(self.window)[-3:], ["/> mv a.txt e", "/> ls e", "a.txt"]
+            self.log_lines(self.window)[-3:],
+            ["/> mv a.txt e", "/> ls e", "a.txt"],
         )
 
     def test_rmdir_error_is_logged(self):
@@ -432,7 +442,9 @@ class TestWindowConfig(WindowTestCase):
 
     def test_missing_archive_keeps_emulator_working(self):
         window = self.make_window(vfs_path=os.path.join(self.tmp, "no.zip"))
-        self.assertIn("Ошибка: не удалось загрузить VFS", window.log.toPlainText())
+        self.assertIn(
+            "Ошибка: не удалось загрузить VFS", window.log.toPlainText()
+        )
         self.type_command(window, "ls")
         self.assertEqual(self.log_lines(window)[-1], "/> ls")
 
@@ -441,7 +453,9 @@ class TestWindowConfig(WindowTestCase):
         with open(path, "w") as broken:
             broken.write("not a zip")
         window = self.make_window(vfs_path=path)
-        self.assertIn("Ошибка: не удалось загрузить VFS", window.log.toPlainText())
+        self.assertIn(
+            "Ошибка: не удалось загрузить VFS", window.log.toPlainText()
+        )
         self.assertIn("Используется пустая VFS", window.log.toPlainText())
 
     def test_missing_script(self):
@@ -461,7 +475,9 @@ class TestWindowConfig(WindowTestCase):
                 "Ошибка: команда не найдена: abc",
             ],
         )
-        self.assertIn("Ошибка: команда не найдена: abc", window.log.toPlainText())
+        self.assertIn(
+            "Ошибка: команда не найдена: abc", window.log.toPlainText()
+        )
 
     def test_script_stops_after_exit(self):
         script = self.write_script("ls\nexit\ncd docs\n")
