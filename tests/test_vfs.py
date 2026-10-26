@@ -13,7 +13,7 @@ from helpers import make_zip
 
 class VFSTestCase(unittest.TestCase):
 
-    def setup_method(self):
+    def setup_method(self, _method=None):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.tmp = tmp.name
@@ -70,8 +70,8 @@ class TestLoading(VFSTestCase):
 
 class TestNavigation(VFSTestCase):
 
-    def setup_method(self):
-        super().setup_method()
+    def setup_method(self, _method=None):
+        super().setup_method(_method)
         self.vfs = self.load({
             "readme.txt": "r",
             "docs/guide.txt": "g",
@@ -145,8 +145,8 @@ class TestNavigation(VFSTestCase):
 
 class TestRmdir(VFSTestCase):
 
-    def setup_method(self):
-        super().setup_method()
+    def setup_method(self, _method=None):
+        super().setup_method(_method)
         self.vfs = self.load({
             "a/b/c/": "",
             "full/f.txt": "x",
@@ -206,8 +206,8 @@ class TestRmdir(VFSTestCase):
 
 class TestMove(VFSTestCase):
 
-    def setup_method(self):
-        super().setup_method()
+    def setup_method(self, _method=None):
+        super().setup_method(_method)
         self.vfs = self.load({
             "a.txt": "A",
             "b.txt": "B",

@@ -53,7 +53,7 @@ class TestParseCommand(unittest.TestCase):
 
 class TestRunCommand(unittest.TestCase):
 
-    def setup_method(self):
+    def setup_method(self, _method=None):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.vfs = VFS.from_zip(
@@ -161,7 +161,7 @@ class TestRunCommand(unittest.TestCase):
 
 class TestRunModifyingCommands(unittest.TestCase):
 
-    def setup_method(self):
+    def setup_method(self, _method=None):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.vfs = VFS.from_zip(
@@ -259,7 +259,7 @@ class TestRunModifyingCommands(unittest.TestCase):
 
 class WindowTestCase(unittest.TestCase):
 
-    def setup_method(self):
+    def setup_method(self, _method=None):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.tmp = tmp.name
@@ -305,8 +305,8 @@ class WindowTestCase(unittest.TestCase):
 
 class TestMainWindow(WindowTestCase):
 
-    def setup_method(self):
-        super().setup_method()
+    def setup_method(self, _method=None):
+        super().setup_method(_method)
         self.window = self.make_window()
 
     def test_window_title(self):
@@ -332,8 +332,8 @@ class TestMainWindow(WindowTestCase):
 
 class TestWindowWithVFS(WindowTestCase):
 
-    def setup_method(self):
-        super().setup_method()
+    def setup_method(self, _method=None):
+        super().setup_method(_method)
         self.window = self.make_window(vfs_path=self.make_vfs())
 
     def test_vfs_loaded_message(self):
@@ -367,8 +367,8 @@ class TestWindowWithVFS(WindowTestCase):
 
 class TestWindowHistory(WindowTestCase):
 
-    def setup_method(self):
-        super().setup_method()
+    def setup_method(self, _method=None):
+        super().setup_method(_method)
         self.window = self.make_window(vfs_path=self.make_vfs())
 
     def test_pwd_output(self):
@@ -405,8 +405,8 @@ class TestWindowHistory(WindowTestCase):
 
 class TestWindowModifyingCommands(WindowTestCase):
 
-    def setup_method(self):
-        super().setup_method()
+    def setup_method(self, _method=None):
+        super().setup_method(_method)
         path = make_zip(self.tmp, {"a.txt": "A", "e/": "", "docs/g.txt": "g"})
         self.window = self.make_window(vfs_path=path)
 
